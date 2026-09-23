@@ -81,7 +81,7 @@ class GeminiBeatVisionAiService(
     private val providerRegistry: ProviderRegistry = ProviderDefaults.imageRegistry()
 ) : BeatVisionAiService {
 
-    private val modelName = "gemini-3.5-flash"
+    private val modelName = "gemini-3.8-flash"
     private val apiKey: String
         get() = try {
             BuildConfig.GEMINI_API_KEY
