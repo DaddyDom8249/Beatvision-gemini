@@ -8,6 +8,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.net.URI
 import java.util.concurrent.TimeUnit
 
 class OpenAiCompatibleImageProvider(
@@ -21,16 +22,21 @@ class OpenAiCompatibleImageProvider(
         .build()
 ) : ImageProvider {
     init {
-        require(endpoint.startsWith("https://")) { "Provider endpoint must use HTTPS." }
+        validateEndpoint(endpoint)
         require(apiKey.isNotBlank()) { "Provider API key must not be blank." }
         require(model.isNotBlank()) { "Provider model must not be blank." }
+        require(model.length <= MAX_MODEL_LENGTH) { "Provider model is too long." }
     }
 
     override suspend fun generateImage(request: ImageGenerationRequest): ProviderResult<SceneImageResult> =
         withContext(Dispatchers.IO) {
+            val prompt = buildPrompt(request)
+            if (prompt.length > MAX_PROMPT_LENGTH) {
+                return@withContext ProviderResult.Failure(descriptor.id, "The image prompt exceeds the provider safety limit.")
+            }
             val payload = JSONObject().apply {
                 put("model", model)
-                put("prompt", buildPrompt(request))
+                put("prompt", prompt)
             }
             val httpRequest = Request.Builder()
                 .url(endpoint)
@@ -40,12 +46,18 @@ class OpenAiCompatibleImageProvider(
                 .build()
             try {
                 client.newCall(httpRequest).execute().use { httpResponse ->
-                    val raw = httpResponse.body?.string().orEmpty()
+                    val body = httpResponse.body
+                        ?: return@withContext ProviderResult.Failure(descriptor.id, "Provider returned an empty response.", retryable = httpResponse.code >= 500)
+                    if (body.contentLength() > MAX_RESPONSE_BYTES) {
+                        return@withContext ProviderResult.Failure(descriptor.id, "Provider response exceeds the safety limit.")
+                    }
+                    val raw = body.stringLimited(MAX_RESPONSE_BYTES)
+                        ?: return@withContext ProviderResult.Failure(descriptor.id, "Provider response exceeds the safety limit.")
                     if (!httpResponse.isSuccessful) {
                         return@withContext ProviderResult.Failure(
                             descriptor.id,
                             "Provider returned HTTP ${httpResponse.code}.",
-                            retryable = httpResponse.code == 429 || httpResponse.code >= 500
+                            retryable = httpResponse.code == 408 || httpResponse.code == 429 || httpResponse.code >= 500
                         )
                     }
                     val data = JSONObject(raw).optJSONArray("data")
@@ -54,6 +66,7 @@ class OpenAiCompatibleImageProvider(
                         ?: return@withContext ProviderResult.Failure(descriptor.id, "Provider returned no image data.")
                     val url = item.optString("url")
                     if (url.isNotBlank()) {
+                        if (!isHttpsUrl(url)) return@withContext ProviderResult.Failure(descriptor.id, "Provider returned an insecure image URL.")
                         return@withContext ProviderResult.Success(
                             SceneImageResult(request.scene.sceneNumber, "scene-${request.scene.sceneNumber}", url, model, "generated"),
                             descriptor.id,
@@ -62,6 +75,7 @@ class OpenAiCompatibleImageProvider(
                     }
                     val b64 = item.optString("b64_json")
                     if (b64.isNotBlank()) {
+                        if (b64.length > MAX_BASE64_LENGTH) return@withContext ProviderResult.Failure(descriptor.id, "Provider returned an image payload that is too large.")
                         return@withContext ProviderResult.Success(
                             SceneImageResult(request.scene.sceneNumber, "scene-${request.scene.sceneNumber}", "data:image/png;base64,$b64", model, "generated"),
                             descriptor.id,
