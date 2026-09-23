@@ -2,68 +2,87 @@ package com.example.data.provider
 
 import android.content.Context
 import android.util.Base64
-import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 class ProviderPreferenceStore(context: Context) {
-    private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     fun putApiKey(providerId: String, apiKey: String) {
-        require(providerId.isNotBlank() && apiKey.isNotBlank())
-        prefs.edit().putString(keyName(providerId), encrypt(apiKey)).apply()
+        require(providerId.isValidId()) { "Invalid provider id." }
+        require(apiKey.isNotBlank()) { "Provider API key must not be blank." }
+        val encrypted = encrypt(apiKey)
+        prefs.edit().putString(keyName(providerId), encrypted).apply()
     }
 
-    fun getApiKey(providerId: String): String? =
-        prefs.getString(keyName(providerId), null)?.let(::decrypt)
+    fun getApiKey(providerId: String): String? {
+        if (!providerId.isValidId()) return null
+        return prefs.getString(keyName(providerId), null)?.let(::decrypt)
+    }
 
     fun removeApiKey(providerId: String) {
+        if (!providerId.isValidId()) return
         prefs.edit().remove(keyName(providerId)).apply()
     }
 
-    private fun keyName(providerId: String) = "api_key_${providerId.trim()}"
+    private fun encrypt(value: String): String {
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateSecretKey())
+        val ciphertext = cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
+        val payload = ByteArray(cipher.iv.size + ciphertext.size)
+        System.arraycopy(cipher.iv, 0, payload, 0, cipher.iv.size)
+        System.arraycopy(ciphertext, 0, payload, cipher.iv.size, ciphertext.size)
+        return Base64.encodeToString(payload, Base64.NO_WRAP)
+    }
 
-    private fun getKey(): SecretKey {
-        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (store.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
-        val generator = KeyGenerator.getInstance("AES", "AndroidKeyStore")
-        generator.init(256)
+    private fun decrypt(encoded: String): String? {
+        return try {
+            val payload = Base64.decode(encoded, Base64.NO_WRAP)
+            if (payload.size <= GCM_IV_BYTES) return null
+            val iv = payload.copyOfRange(0, GCM_IV_BYTES)
+            val ciphertext = payload.copyOfRange(GCM_IV_BYTES, payload.size)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateSecretKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+            String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun getOrCreateSecretKey(): SecretKey {
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        val existing = keyStore.getKey(KEY_ALIAS, null)
+        if (existing is SecretKey) return existing
+
+        val generator = KeyGenerator.getInstance("AES", ANDROID_KEYSTORE)
+        generator.init(android.security.keystore.KeyGenParameterSpec.Builder(
+            KEY_ALIAS,
+            android.security.keystore.KeyProperties.PURPOSE_ENCRYPT or
+                android.security.keystore.KeyProperties.PURPOSE_DECRYPT
+        ).setBlockModes(android.security.keystore.KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(android.security.keystore.KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256)
+            .build())
         return generator.generateKey()
     }
 
-    private fun encrypt(value: String): String {
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, getKey())
-        val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
-        return Base64.encodeToString(
-            ByteBuffer.allocate(4 + cipher.iv.size + encrypted.size)
-                .putInt(cipher.iv.size)
-                .put(cipher.iv)
-                .put(encrypted)
-                .array(),
-            Base64.NO_WRAP
-        )
-    }
+    private fun keyName(providerId: String) = "api_key_$providerId"
 
-    private fun decrypt(value: String): String? = try {
-        val bytes = Base64.decode(value, Base64.NO_WRAP)
-        val buffer = ByteBuffer.wrap(bytes)
-        val ivSize = buffer.int
-        if (ivSize !in 12..32 || buffer.remaining() <= ivSize) return null
-        val iv = ByteArray(ivSize).also(buffer::get)
-        val encrypted = ByteArray(buffer.remaining()).also(buffer::get)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, getKey(), GCMParameterSpec(128, iv))
-        String(cipher.doFinal(encrypted), Charsets.UTF_8)
-    } catch (_: Exception) {
-        null
-    }
+    private fun String.isValidId(): Boolean =
+        length in 1..64 && all { it.isLetterOrDigit() || it == '_' || it == '-' || it == '.' }
 
-    private companion object {
-        const val PREFS = "beatvision_provider_preferences"
-        const val KEY_ALIAS = "BeatVisionProviderCredentialKey"
+    companion object {
+        private const val PREFS_NAME = "beatvision_provider_credentials"
+        private const val KEY_ALIAS = "BeatVisionProviderCredentialKey"
+        private const val ANDROID_KEYSTORE = "AndroidKeyStore"
+        private const val TRANSFORMATION = "AES/GCM/NoPadding"
+        private const val GCM_IV_BYTES = 12
+        private const val GCM_TAG_BITS = 128
     }
 }
