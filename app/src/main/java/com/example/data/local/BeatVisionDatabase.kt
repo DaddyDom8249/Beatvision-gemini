@@ -19,7 +19,7 @@ abstract class BeatVisionDatabase : RoomDatabase() {
                     context.applicationContext,
                     BeatVisionDatabase::class.java,
                     "beatvision_lite.db"
-                ).fallbackToDestructiveMigration(dropAllTables = true).build()
+                ).build()
                 INSTANCE = instance
                 instance
             }
