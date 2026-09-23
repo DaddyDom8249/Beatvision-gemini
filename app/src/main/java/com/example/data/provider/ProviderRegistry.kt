@@ -15,7 +15,11 @@ class ProviderRegistry(
         selectedProviderId: String? = null
     ): ProviderResult<SceneImageResult> {
         val candidates = when (selectionMode) {
-            ProviderSelectionMode.MANUAL -> imageProviders.filter { it.descriptor.id == selectedProviderId }
+            ProviderSelectionMode.MANUAL -> imageProviders.filter {
+                it.descriptor.id == selectedProviderId &&
+                    it.descriptor.configured &&
+                    ProviderCapability.IMAGE_GENERATION in it.descriptor.capabilities
+            }
             ProviderSelectionMode.AUTOMATIC -> imageProviders.filter {
                 it.descriptor.configured &&
                     ProviderCapability.IMAGE_GENERATION in it.descriptor.capabilities
