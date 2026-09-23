@@ -8,6 +8,7 @@ import { detectVisualReuse } from './visual-reuse-detector.ts';
 
 const clientRateLimit = new Map<string, number>();
 const RATE_LIMIT_WINDOW_MS = 10000; // 10 seconds per client IP
+const MAX_CLIENT_BODY_BYTES = 256 * 1024;
 
 const json = (r: Request, data: unknown, status = 200) => new Response(JSON.stringify(data, null, 2), {
   status,
@@ -45,6 +46,11 @@ export default {
         return json(r, { ok: false, error: 'Method Not Allowed. Client image endpoint requires POST.' }, 405);
       }
 
+      const declaredLength = Number(r.headers.get('Content-Length') || 0);
+      if (declaredLength > MAX_CLIENT_BODY_BYTES) {
+        return json(r, { ok: false, error: 'Request body exceeds the 256 KiB client scene limit.' }, 413);
+      }
+
       const clientIp = r.headers.get('CF-Connecting-IP') || r.headers.get('X-Forwarded-For') || 'client';
       const now = Date.now();
       const lastRequest = clientRateLimit.get(clientIp) || 0;
@@ -75,7 +81,15 @@ export default {
       }
 
       let body: any = null;
-      try { body = await r.json(); } catch { return json(r, { ok: false, error: 'Invalid JSON body.' }, 400); }
+      try {
+        const raw = await r.arrayBuffer();
+        if (raw.byteLength > MAX_CLIENT_BODY_BYTES) {
+          return json(r, { ok: false, error: 'Request body exceeds the 256 KiB client scene limit.' }, 413);
+        }
+        body = JSON.parse(new TextDecoder().decode(raw));
+      } catch {
+        return json(r, { ok: false, error: 'Invalid JSON body.' }, 400);
+      }
 
       // Normalize if body provides scene directly
       if (body?.scene && !body?.payload?.storyboard?.scenes) {
