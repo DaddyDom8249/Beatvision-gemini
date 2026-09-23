@@ -64,6 +64,9 @@ class BeatVisionViewModel @JvmOverloads constructor(
     private val _isRegeneratingScene = MutableStateFlow(false)
     val isRegeneratingScene: StateFlow<Boolean> = _isRegeneratingScene.asStateFlow()
 
+    private val _isGeneratingSceneVisual = MutableStateFlow(false)
+    val isGeneratingSceneVisual: StateFlow<Boolean> = _isGeneratingSceneVisual.asStateFlow()
+
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
@@ -382,6 +385,36 @@ class BeatVisionViewModel @JvmOverloads constructor(
                 val updatedProj = current.copy(storyboard = scenes)
                 _activeProject.value = updatedProj
                 repository.saveProject(updatedProj)
+            }
+        }
+    }
+
+    fun generateSceneVisual(sceneIndex: Int) {
+        val current = _activeProject.value ?: return
+        val world = current.worldReport ?: return
+        val scenes = current.storyboard.toMutableList()
+        if (sceneIndex !in scenes.indices) return
+        val scene = scenes[sceneIndex]
+
+        _errorMessage.value = null
+        _isGeneratingSceneVisual.value = true
+
+        viewModelScope.launch {
+            val result = aiService.generateSceneImage(scene, world)
+            _isGeneratingSceneVisual.value = false
+
+            result.onSuccess { imageResult ->
+                val updatedScene = scene.copy(
+                    generatedImageUrl = imageResult.imageUrl,
+                    generatedImageModel = imageResult.model,
+                    generatedImageStatus = imageResult.status
+                )
+                scenes[sceneIndex] = updatedScene
+                val updatedProj = current.copy(storyboard = scenes)
+                _activeProject.value = updatedProj
+                repository.saveProject(updatedProj)
+            }.onFailure { err ->
+                _errorMessage.value = err.message ?: "The visual provider is not configured or generation failed."
             }
         }
     }

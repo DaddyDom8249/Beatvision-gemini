@@ -1,6 +1,7 @@
 package com.example
 
 import android.os.Bundle
+import android.view.ActionMode
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -16,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.BeatVisionViewModel
 import com.example.ui.navigation.Screen
@@ -29,6 +31,8 @@ import com.example.ui.theme.CinematicBlack
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
+    private var currentFloatingActionMode: ActionMode? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -38,6 +42,30 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onWindowStartingActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? {
+        if (type == ActionMode.TYPE_FLOATING) {
+            return try {
+                val mode = super.onWindowStartingActionMode(callback, type)
+                currentFloatingActionMode = mode
+                mode
+            } catch (_: Exception) {
+                null
+            }
+        }
+        return super.onWindowStartingActionMode(callback, type)
+    }
+
+    override fun onActionModeFinished(mode: ActionMode?) {
+        if (mode == currentFloatingActionMode) {
+            currentFloatingActionMode = null
+        }
+        try {
+            super.onActionModeFinished(mode)
+        } catch (_: Exception) {
+            // Guard against unexpected DecorView floating action mode teardown
+        }
+    }
 }
 
 @Composable
@@ -45,9 +73,11 @@ fun BeatVisionApp(
     viewModel: BeatVisionViewModel = viewModel()
 ) {
     val currentScreen by viewModel.currentScreen.collectAsState()
+    val focusManager = LocalFocusManager.current
 
     // Android back navigation handling
     BackHandler(enabled = currentScreen !is Screen.Home) {
+        focusManager.clearFocus()
         viewModel.navigateBack()
     }
 

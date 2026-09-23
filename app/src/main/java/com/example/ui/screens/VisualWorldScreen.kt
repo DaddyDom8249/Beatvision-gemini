@@ -43,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -82,6 +83,7 @@ fun VisualWorldScreen(
 
     var showRefineDialog by remember { mutableStateOf(false) }
     var refineFeedback by remember { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
 
     Scaffold(
         topBar = {
@@ -383,7 +385,10 @@ fun VisualWorldScreen(
     // Refinement Dialog
     if (showRefineDialog) {
         AlertDialog(
-            onDismissRequest = { showRefineDialog = false },
+            onDismissRequest = {
+                focusManager.clearFocus()
+                showRefineDialog = false
+            },
             title = {
                 Text(
                     text = "Refine Visual World",
@@ -416,6 +421,7 @@ fun VisualWorldScreen(
                 TextButton(
                     onClick = {
                         val fb = refineFeedback
+                        focusManager.clearFocus()
                         showRefineDialog = false
                         refineFeedback = ""
                         viewModel.refineWorld(fb)
@@ -426,7 +432,10 @@ fun VisualWorldScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showRefineDialog = false }) {
+                TextButton(onClick = {
+                    focusManager.clearFocus()
+                    showRefineDialog = false
+                }) {
                     Text("CANCEL", color = TextSecondary)
                 }
             },

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="BeatVision provider execution arena">
+  <title>BeatVision Provider Arena</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div><p class="eyebrow">BEATVISION / PROVIDER ARENA</p><h1>Connect technology. Create the world.</h1><p class="lede">A safe execution lab for testing real provider capabilities against the BeatVision music-video pipeline.</p></div>
+    <div class="status" id="gatewayStatus">Gateway: not checked</div>
+  </header>
+  <main>
+    <section class="panel setup">
+      <div class="panel-head"><h2>Project input</h2><button id="checkGateway">Check gateway</button></div>
+      <div class="grid two"><label>Song title<input id="songTitle" value="Midnight Static" autocomplete="off"></label><label>Style<input id="style" value="dark cinematic industrial rock" autocomplete="off"></label></div>
+      <label>Song audio <span class="muted">optional for demo, required for live Audio Analysis</span><input id="audioFile" type="file" accept="audio/*"></label>
+      <label>Lyrics<textarea id="lyrics" rows="6">The city sleeps beneath the static
+I hear the wires breathe tonight
+Every broken signal turns cinematic
+And every shadow learns to fight</textarea></label>
+      <label>Gateway URL<input id="gateway" placeholder="https://your-gateway.example.com" inputmode="url" autocomplete="url"></label>
+      <label>Gateway token <span class="muted">optional, session only</span><input id="gatewayToken" type="password" placeholder="Bearer token configured on your gateway" autocomplete="off"></label>
+      <p class="hint">The gateway URL and token stay in this browser session only. Provider secrets should live in gateway environment variables, never in source code or GitHub Pages.</p>
+      <div class="actions"><button class="primary" id="runPipeline">Run provider pipeline</button><button id="runDemo">Run deterministic demo</button></div>
+    </section>
+    <section class="pipeline" id="pipeline" aria-label="BeatVision pipeline"></section>
+    <section class="panel">
+      <div class="panel-head"><h2>Provider bench</h2><span class="muted">Independent capability execution and telemetry</span></div>
+      <div class="bench-summary" id="benchSummary"><span>0 executions</span><span>0 successful</span><span>0 failed</span></div>
+      <div class="cap-grid" id="capabilities"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Latest execution</h2><span class="muted" id="latestMeta">No capability run yet</span></div>
+      <div class="telemetry" id="latestExecution"><div class="empty">Run a capability to inspect request ID, provider, latency, status and output.</div></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Execution log</h2><div class="actions"><button id="copyLog">Copy log</button><button id="clearLog">Clear</button></div></div>
+      <textarea id="log" class="log" aria-label="Execution log" aria-live="polite" readonly spellcheck="false">Ready.</textarea>
+    </section>
+  </main>
+  <footer><small>BeatVision Arena · Provider contract 1.1 · Demo mode never makes external provider calls.</small></footer>
+  <script src="provider-contracts.js?v=20260911-2"></script>
+  <script src="app.js?v=20260911-2"></script>
+  <script src="animation-bridge.js?v=20260911-1"></script>
+  <script src="motion-bridge.js?v=20260911-2"></script>
+  <script src="log-guard.js?v=20260911-2"></script>
+</body>
+</html>

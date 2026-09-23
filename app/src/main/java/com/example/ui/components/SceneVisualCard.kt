@@ -37,11 +37,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.data.model.StoryboardScene
 import com.example.ui.theme.AmberHalogen
 import com.example.ui.theme.BorderSubtle
@@ -58,7 +60,8 @@ fun SceneVisualCard(
     scene: StoryboardScene,
     modifier: Modifier = Modifier,
     isCinematicPreviewMode: Boolean = false,
-    showDetailsOverlay: Boolean = true
+    showDetailsOverlay: Boolean = true,
+    isDemoFallback: Boolean = true
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "cinematic_motion")
 
@@ -106,9 +109,21 @@ fun SceneVisualCard(
             )
             .testTag("scene_visual_card_${scene.sceneNumber}")
     ) {
-        // Procedural Cinematic Canvas rendering
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
+        val hasRealImage = !scene.generatedImageUrl.isNullOrBlank()
+
+        if (hasRealImage) {
+            AsyncImage(
+                model = scene.generatedImageUrl,
+                contentDescription = "AI Generated Visual for Scene ${scene.sceneNumber}",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("ai_generated_image_${scene.sceneNumber}"),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            // Procedural Cinematic Canvas rendering
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
             val h = size.height
             val centerX = w / 2f + panAnim
             val centerY = h / 2f
@@ -246,21 +261,27 @@ fun SceneVisualCard(
                 size = size
             )
         }
+        }
 
-        // Top Header Overlay: "SCENE CONCEPT" label and Scene number badge
+        // Top Header Overlay: "AI GENERATED VISUAL" or "SCENE CONCEPT" label and Scene number badge
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Mandatory label per instructions: "SCENE CONCEPT"
+            // Label per instructions: "AI GENERATED VISUAL" when real image returned, else "SCENE CONCEPT" / "SCENE CONCEPT — DEMO"
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(CinematicBlack.copy(alpha = 0.75f))
-                    .border(1.dp, ElectricCyan.copy(alpha = 0.8f), RoundedCornerShape(6.dp))
+                    .background(CinematicBlack.copy(alpha = 0.85f))
+                    .border(
+                        1.dp,
+                        if (hasRealImage) ElectricCyan else ElectricCyan.copy(alpha = 0.8f),
+                        RoundedCornerShape(6.dp)
+                    )
                     .padding(horizontal = 8.dp, vertical = 3.dp)
+                    .testTag(if (hasRealImage) "ai_generated_visual_badge" else "scene_concept_badge")
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
@@ -271,7 +292,7 @@ fun SceneVisualCard(
                     )
                     Spacer(modifier = Modifier.width(5.dp))
                     Text(
-                        text = "SCENE CONCEPT",
+                        text = if (hasRealImage) "AI GENERATED VISUAL" else if (isDemoFallback) "SCENE CONCEPT — DEMO" else "SCENE CONCEPT",
                         color = ElectricCyan,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,

@@ -1,0 +1,80 @@
+name: BeatVision Arena Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Static, bundle, security, and live failure-path audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: JavaScript syntax checks
+        run: |
+          node --check app.js
+          node --check provider-contracts.js
+          node --check log-guard.js
+          node --check motion-bridge.js
+          node --check tests/static-audit.mjs
+          node --check tests/pipeline-coherence-audit.mjs
+          node --check tests/render-integrity.mjs
+          node --check tests/live-smoke.mjs
+          node --check tests/security-audit.mjs
+          node --check tests/animation-state-audit.mjs
+          node --check tests/termux-runner-audit.mjs
+          node --check tests/termux-full-pipeline.mjs
+
+      - name: Storyboard integrity regression tests
+        run: node --experimental-strip-types --test worker/src/storyboard-validator.test.ts
+
+      - name: Composition and reuse regression tests
+        run: node --experimental-strip-types --test worker/src/composition-model.test.ts
+
+      - name: Semantic visual reuse regression tests
+        run: node --experimental-strip-types --test worker/src/visual-reuse-detector.test.ts
+
+      - name: Musical structure regression tests
+        run: node --experimental-strip-types --test worker/src/musical-structure.test.ts
+
+      - name: Scene splitting and continuity regression tests
+        run: node --experimental-strip-types --test worker/src/scene-splitting.test.ts worker/src/character-continuity.test.ts
+
+      - name: Worker bundle/type-surface checks
+        run: |
+          npx --yes esbuild worker/src/arena-validated-entry.ts --bundle --format=esm --platform=neutral --outfile=/tmp/beatvision-arena-worker.mjs
+          npx --yes esbuild worker/src/index.ts --bundle --format=esm --platform=neutral --outfile=/tmp/beatvision-arena-index.mjs
+
+      - name: Cross-system pipeline coherence audit
+        run: node tests/pipeline-coherence-audit.mjs
+
+      - name: Static architecture audit
+        run: node tests/static-audit.mjs
+
+      - name: Security regression audit
+        run: node tests/security-audit.mjs
+
+      - name: Persistent animation state audit
+        run: node tests/animation-state-audit.mjs
+
+      - name: Termux runner safety audit
+        run: node tests/termux-runner-audit.mjs
+
+      - name: Render integrity adversarial tests
+        run: node tests/render-integrity.mjs
+
+      - name: Live gateway failure-path smoke tests
+        run: node tests/live-smoke.mjs

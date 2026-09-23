@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.BeatVisionViewModel
 import com.example.ui.components.ChipTag
+import com.example.ui.components.CinematicErrorBanner
 import com.example.ui.components.CinematicTopBar
 import com.example.ui.components.GlowingButton
 import com.example.ui.components.OutlinedCinematicButton
@@ -73,6 +74,8 @@ fun SceneDetailScreen(
     val project by viewModel.activeProject.collectAsState()
     val scenes = project?.storyboard ?: emptyList()
     val isRegenerating by viewModel.isRegeneratingScene.collectAsState()
+    val isGeneratingVisual by viewModel.isGeneratingSceneVisual.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     val currentScene = scenes.getOrNull(sceneIndex)
 
@@ -182,6 +185,32 @@ fun SceneDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 14.dp)
+                    )
+                }
+
+                // Error notice (if visual generation fails or safety blocks)
+                if (errorMessage != null) {
+                    item {
+                        CinematicErrorBanner(
+                            errorMessage = errorMessage ?: "",
+                            onDismiss = { viewModel.clearError() },
+                            modifier = Modifier.padding(bottom = 14.dp)
+                        )
+                    }
+                }
+
+                // Generate / Regenerate AI Visual Button
+                item {
+                    val hasRealImage = !currentScene.generatedImageUrl.isNullOrBlank()
+                    GlowingButton(
+                        text = if (isGeneratingVisual) "GENERATING VISUAL..." else if (hasRealImage) "REGENERATE AI VISUAL" else "GENERATE AI VISUAL",
+                        onClick = { viewModel.generateSceneVisual(sceneIndex) },
+                        icon = Icons.Default.AutoAwesome,
+                        enabled = !isGeneratingVisual,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 14.dp),
+                        testTag = "generate_scene_visual_button"
                     )
                 }
 

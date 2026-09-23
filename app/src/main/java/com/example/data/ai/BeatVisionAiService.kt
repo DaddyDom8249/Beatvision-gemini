@@ -1,6 +1,8 @@
 package com.example.data.ai
 
 import com.example.BuildConfig
+import com.example.data.arena.ArenaGatewayClient
+import com.example.data.arena.SceneImageResult
 import com.example.data.model.CharacterProfile
 import com.example.data.model.Cinematography
 import com.example.data.model.EnvironmentProfile
@@ -53,6 +55,12 @@ interface BeatVisionAiService {
         world: VisualWorld
     ): Result<MotionPlan>
 
+    // Phase 4: Generate Real AI Image via Arena visual provider
+    suspend fun generateSceneImage(
+        scene: StoryboardScene,
+        world: VisualWorld
+    ): Result<SceneImageResult>
+
     // Future image-to-video model interface placeholder (e.g. Wan, LTX)
     suspend fun generateVideo(
         scene: StoryboardScene,
@@ -66,7 +74,8 @@ class GeminiBeatVisionAiService(
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(45, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
-        .build()
+        .build(),
+    private val arenaClient: ArenaGatewayClient = ArenaGatewayClient()
 ) : BeatVisionAiService {
 
     private val modelName = "gemini-3.5-flash"
@@ -96,13 +105,22 @@ class GeminiBeatVisionAiService(
 
         val prompt = """
 You are an award-winning music video director, cinematographer, and visual world-builder for BeatVision.
-Analyze this song and creative direction to design a complete, cohesive cinematic visual world for the music video.
+Your core principle: "Every Song Has a World. BeatVision Reveals It."
+You must analyze the song deeply—extracting its lyrical themes, emotional progression, tonal shifts, recurring imagery, character relationships, and song structure.
+Do NOT invent events that contradict the lyrics. Avoid generic tropes or AI prompt cliches. Transform the song into a single, cohesive cinematic world.
 
 Song: "$songTitle"
 Artist: "$artist"
 Creative Direction: "$creativeDirection"
 Lyrics:
 $lyrics
+
+Internally establish:
+1. Emotional Arc (how the song evolves musically and lyrically from opening to resolution)
+2. Character Bible (persistent characters with age, distinct appearance, specific clothing fabrics/colors, emotional states, and relationships)
+3. Environment Bible (coherent locations with specific architecture, lighting, weather, time of day, and key interactive objects)
+4. Visual Language (color palette, lighting contrast, textures, atmosphere)
+5. Continuity Rules (strict rules governing character consistency, weather progression, and color palette across all scenes)
 
 Return ONLY a valid JSON object matching this exact schema:
 {
@@ -116,8 +134,8 @@ Return ONLY a valid JSON object matching this exact schema:
   "characters": [
     {
       "name": "Character name",
-      "appearance": "Age, physical traits, hair, face",
-      "clothing": "Specific garments, colors, textures",
+      "appearance": "Age, physical traits, hair, face, build",
+      "clothing": "Specific garments, colors, textures, and wear",
       "personality": "Core traits",
       "emotionalState": "Current emotional state",
       "role": "Narrative role in the video",
@@ -225,15 +243,23 @@ Return ONLY a valid JSON object matching the full VisualWorld schema (same keys:
         }
 
         val charSummary = world.characters.joinToString("\n") {
-            "- ${it.name}: ${it.appearance}. Clothing: ${it.clothing}. Behavior: ${it.performanceBehavior}"
+            "- ${it.name} (Role: ${it.role}): Appearance: ${it.appearance}. Wardrobe: ${it.clothing}. Personality: ${it.personality}. Current State: ${it.emotionalState}. Staging Behavior: ${it.performanceBehavior}"
         }
         val envSummary = world.environments.joinToString("\n") {
-            "- ${it.name}: ${it.appearance}. Lighting: ${it.lighting}. Atmosphere: ${it.atmosphere}"
+            "- ${it.name} (Time: ${it.timeOfDay}): Appearance: ${it.appearance}. Architecture: ${it.architecture}. Lighting: ${it.lighting}. Atmosphere: ${it.atmosphere}. Key Objects: ${it.importantObjects}"
         }
 
         val prompt = """
-You are the storyboard director and continuity supervisor for BeatVision.
+You are the storyboard director, cinematographer, and continuity supervisor for BeatVision.
 Create an EXACT 6-SCENE storyboard for the music video of "$songTitle".
+
+CRITICAL DIRECTING DIRECTIVE:
+The storyboard must feel like ONE continuous, coherent music video, NOT six disconnected scene descriptions.
+Every scene must connect logically to:
+- The previous scene's concluding position and actions
+- The next scene's opening setup
+- The specific lyrics and emotional arc of this song section
+- The established characters and environments
 
 Song Lyrics:
 $lyrics
@@ -241,24 +267,36 @@ $lyrics
 Visual World Context:
 Universe: ${world.theWorld}
 Emotional Core: ${world.emotionalCore}
-Visual Language: ${world.visualLanguage.colors}, ${world.visualLanguage.lighting}
-Characters:
+Visual Language: ${world.visualLanguage.colors} | Lighting: ${world.visualLanguage.lighting} | Textures: ${world.visualLanguage.textures}
+Cinematography: Framing: ${world.cinematography.framing} | Camera Movement: ${world.cinematography.cameraMovement}
+Characters Bible:
 $charSummary
-Environments:
+Environments Bible:
 $envSummary
+Visual Motifs: ${world.visualMotifs.joinToString("; ")}
 Continuity Rules:
 ${world.continuityRules.joinToString("\n") { "- $it" }}
 
 Structure requirements:
-- Exactly 6 scenes:
-  Scene 1: Opening
-  Scene 2: Introduction
-  Scene 3: Development
-  Scene 4: Emotional Peak
-  Scene 5: Transformation / Climax
-  Scene 6: Resolution
-- Every scene must include a structured Motion Plan detailing physical character motion, facial performance, interaction, environment motion, camera motion, and timing.
-- Characters and environments must STRICTLY preserve their defined appearances.
+- Exactly 6 scenes forming a seamless narrative progression:
+  Scene 1: Opening (Establishing tone, environment, and protagonist's initial state)
+  Scene 2: Introduction (Inciting incident or entry of secondary character / shift in lyrical energy)
+  Scene 3: Development (Escalation, journey, or closing spatial/emotional distance)
+  Scene 4: Emotional Peak (Direct confrontation, vocal peak, or revelation)
+  Scene 5: Transformation / Climax (Decisive physical action, breakthrough, or cathartic release)
+  Scene 6: Resolution (New equilibrium, lingering emotional resonance, and final visual beat)
+
+- MOTION PLAN REQUIREMENTS (STRICT):
+  Every scene must contain a specific, directable physical Motion Plan:
+  * characterMotion: Observable bodily movements (what each person physically does with limbs and body).
+  * facialPerformance: Specific micro-expressions and emotional shifts (brow, gaze, mouth, jaw tension).
+  * interaction: Concrete tactile or spatial interaction between people or specific objects.
+  * environmentMotion: Physical movement in the environment (wind, rain, smoke, dust, lights, vehicles, fabric, hair).
+  * cameraMotion: Specific camera kinetics (tracking, dolly-in, pull-out, orbit, crane, handheld, static).
+  * timing: Specific scene duration and timecodes (e.g., 00:00 - 00:20).
+  * NEVER use lazy phrases like "make it cinematic". Every motion must be tangible and observable on set.
+  * Characters MUST wear the exact wardrobe and retain the exact traits established in the Character Bible.
+  * Environments MUST match the Environment Bible.
 
 Return ONLY a JSON array of 6 objects with this schema:
 [
@@ -266,7 +304,7 @@ Return ONLY a JSON array of 6 objects with this schema:
     "sceneNumber": 1,
     "sceneTitle": "Title of Scene",
     "storyRole": "Opening",
-    "storyPurpose": "Why this scene exists in the narrative arc",
+    "storyPurpose": "Why this scene exists in the narrative arc and how it connects from/to neighboring scenes",
     "lyricsSection": "Lines of lyrics corresponding to this moment",
     "characters": ["Character Name 1"],
     "environment": "Location Name",
@@ -297,6 +335,8 @@ Return ONLY a JSON array of 6 objects with this schema:
                 json.getJSONArray("scenes")
             } else if (json.has("storyboard")) {
                 json.getJSONArray("storyboard")
+            } else if (json.has("items")) {
+                json.getJSONArray("items")
             } else {
                 throw IllegalStateException("Unexpected JSON response structure for storyboard")
             }
@@ -315,19 +355,150 @@ Return ONLY a JSON array of 6 objects with this schema:
         scene: StoryboardScene,
         world: VisualWorld
     ): Result<SceneConcept> = withContext(Dispatchers.IO) {
-        val concept = SceneConcept(
-            sceneDescription = "${scene.sceneTitle}: ${scene.storyPurpose}",
-            visualComposition = "${scene.cameraDirection}. Lighting: ${scene.lighting}",
-            characterAppearance = scene.characters.joinToString(", ") { charName ->
-                val profile = world.characters.find { it.name.equals(charName, ignoreCase = true) }
-                if (profile != null) "$charName (${profile.clothing})" else charName
-            },
-            environment = scene.environment,
-            camera = scene.cameraDirection,
-            lighting = scene.lighting,
-            motion = scene.motionPlan.sceneSummary
+        // 1. Environment Bible resolution & object continuity
+        val envProfile = world.environments.find { env ->
+            val stopWords = setOf("the", "a", "an", "and", "or", "in", "at", "on", "of", "to")
+            val sceneWords = scene.environment.lowercase().split(" ", "-", "/", "_")
+                .map { it.trim() }
+                .filter { it.length > 2 && it !in stopWords }
+            val envWords = env.name.lowercase().split(" ", "-", "/", "_")
+                .map { it.trim() }
+                .filter { it.length > 2 && it !in stopWords }
+
+            env.name.equals(scene.environment, ignoreCase = true) ||
+            env.name.contains(scene.environment, ignoreCase = true) ||
+            scene.environment.contains(env.name, ignoreCase = true) ||
+            sceneWords.any { word -> envWords.contains(word) }
+        } ?: world.environments.firstOrNull()
+
+        val environmentDetails = if (envProfile != null) {
+            "${envProfile.name} (${envProfile.timeOfDay}). Architecture: ${envProfile.architecture}. Atmosphere: ${envProfile.atmosphere}. Important Objects: ${envProfile.importantObjects}"
+        } else {
+            "${scene.environment}. Atmosphere: ${scene.atmosphere}"
+        }
+
+        // 2. Character Bible resolution & wardrobe continuity
+        val characterBibles = scene.characters.mapNotNull { charName ->
+            world.characters.find { it.name.equals(charName, ignoreCase = true) }
+        }
+
+        val characterDescriptions = characterBibles.joinToString("; ") { char ->
+            "${char.name}: Age/Appearance: ${char.appearance}. Wardrobe: ${char.clothing}. Emotional State: ${char.emotionalState}. Staging Posture: ${char.performanceBehavior}"
+        }.ifEmpty {
+            scene.characters.joinToString(", ")
+        }
+
+        // 3. Camera Kinetics & Cinematography translation
+        val cameraKinetics = scene.motionPlan.cameraMotion.joinToString("; ")
+        val framing = world.cinematography.framing
+        val lensStyle = world.cinematography.lensStyle
+        val cameraComposition = if (cameraKinetics.isNotBlank()) {
+            "${scene.cameraDirection} (Kinetics: $cameraKinetics). Framing: $framing. Lens: $lensStyle"
+        } else {
+            "${scene.cameraDirection}. Framing: $framing. Lens: $lensStyle"
+        }
+
+        // 4. Lighting translation with motivated sources
+        val lightingDetails = if (envProfile != null) {
+            "${scene.lighting}. Key Source: ${envProfile.lighting}. Palette: ${world.visualLanguage.colors}"
+        } else {
+            "${scene.lighting}. Palette: ${world.visualLanguage.colors}"
+        }
+
+        // 5. Motion-to-Visual Translation
+        val physicalActions = scene.motionPlan.characterMotion.joinToString(". ")
+        val facialPerformance = scene.motionPlan.facialPerformance.joinToString(". ")
+        val interactions = scene.motionPlan.interaction.joinToString(". ")
+        val envMotion = scene.motionPlan.environmentMotion.joinToString(". ")
+
+        val motionVisualTranslation = buildString {
+            append("Motion Arc: ${scene.motionPlan.sceneSummary}. ")
+            if (physicalActions.isNotBlank()) append("Physical Action: $physicalActions. ")
+            if (facialPerformance.isNotBlank()) append("Facial Performance: $facialPerformance. ")
+            if (interactions.isNotBlank()) append("Tactile Interaction: $interactions. ")
+            if (envMotion.isNotBlank()) append("Environmental Movement: $envMotion. ")
+        }.trim()
+
+        val sceneDescription = buildString {
+            append("${scene.sceneTitle} (Scene ${scene.sceneNumber} • ${scene.storyRole}): ")
+            append("${scene.storyPurpose}. ")
+            append("Visual moment: ${scene.visualPrompt}. ")
+            if (scene.continuityRequirements.isNotBlank()) {
+                append("Continuity Rules: ${scene.continuityRequirements}")
+            }
+        }.trim()
+
+        // 6. AI Enrichment when API key is valid
+        if (isApiKeyValid()) {
+            val prompt = """
+You are the visual concept artist, cinematographer, and director of photography for BeatVision.
+Translate this storyboard scene into a precise, coherent SCENE CONCEPT.
+The concept must visually represent the physical action described in the Motion Plan while maintaining strict visual continuity with the Character Bible, Environment Bible, Objects, and Cinematography.
+
+Song Context: ${world.theWorld}
+Scene: Scene ${scene.sceneNumber} - ${scene.sceneTitle} (${scene.storyRole})
+Story Purpose: ${scene.storyPurpose}
+Lyrics Section: "${scene.lyricsSection}"
+Characters in Scene:
+$characterDescriptions
+Environment:
+$environmentDetails
+Visual Motifs & Recurring Objects: ${world.visualMotifs.joinToString("; ")}
+Continuity Requirements: ${scene.continuityRequirements}
+Motion Plan:
+- Summary: ${scene.motionPlan.sceneSummary}
+- Character Motion: $physicalActions
+- Facial Performance: $facialPerformance
+- Interaction: $interactions
+- Environment Motion: $envMotion
+- Camera Kinetics: $cameraKinetics
+- Timing: ${scene.motionPlan.timing}
+
+Camera Translation Instructions:
+- Framing & Lens: $framing, $lensStyle
+- Camera Movement: ${scene.cameraDirection}, $cameraKinetics
+
+Return ONLY a valid JSON object matching this schema:
+{
+  "sceneDescription": "Vivid cinematic narrative describing the exact visual frame, freezing the key physical moment with characters, props, and setting",
+  "visualComposition": "Precise shot composition, camera perspective (e.g. low-angle, tracking lateral, push-in close-up), depth of field, and subject placement",
+  "characterAppearance": "Exact preserved wardrobe, colors, facial expressions, eye contact, and physical body posture",
+  "environment": "Architectural textures, lighting sources, weather particles, and key interactive objects",
+  "camera": "Focal length, camera angle, and kinetic movement vector",
+  "lighting": "Motivated light sources, color temperature, rim lighting, and shadow contrast",
+  "motion": "Concrete translation of the physical motion beat frozen in the frame (hands, posture, physical contact)"
+}
+""".trimIndent()
+
+            val aiResult = callGeminiJson(prompt).mapCatching { json ->
+                SceneConcept(
+                    sceneDescription = json.optString("sceneDescription", sceneDescription),
+                    visualComposition = json.optString("visualComposition", cameraComposition),
+                    characterAppearance = json.optString("characterAppearance", characterDescriptions),
+                    environment = json.optString("environment", environmentDetails),
+                    camera = json.optString("camera", cameraComposition),
+                    lighting = json.optString("lighting", lightingDetails),
+                    motion = json.optString("motion", motionVisualTranslation),
+                    isDemoFallback = false
+                )
+            }
+            if (aiResult.isSuccess) {
+                return@withContext aiResult
+            }
+        }
+
+        // Procedural Concept Fallback (SCENE CONCEPT — DEMO / Free-Tier)
+        val proceduralConcept = SceneConcept(
+            sceneDescription = sceneDescription,
+            visualComposition = cameraComposition,
+            characterAppearance = characterDescriptions,
+            environment = environmentDetails,
+            camera = cameraComposition,
+            lighting = lightingDetails,
+            motion = motionVisualTranslation,
+            isDemoFallback = true
         )
-        Result.success(concept)
+        Result.success(proceduralConcept)
     }
 
     override suspend fun generateMotionPlan(
@@ -638,5 +809,12 @@ Return ONLY a JSON array of 6 objects with this schema:
             )
         }
         return scenes
+    }
+
+    override suspend fun generateSceneImage(
+        scene: StoryboardScene,
+        world: VisualWorld
+    ): Result<SceneImageResult> = withContext(Dispatchers.IO) {
+        arenaClient.generateSceneImage(scene, world)
     }
 }

@@ -281,6 +281,9 @@ data class ProjectEntity(
                     put("motionDirection", s.motionDirection)
                     put("visualPrompt", s.visualPrompt)
                     put("continuityRequirements", s.continuityRequirements)
+                    s.generatedImageUrl?.let { put("generatedImageUrl", it) }
+                    s.generatedImageModel?.let { put("generatedImageModel", it) }
+                    s.generatedImageStatus?.let { put("generatedImageStatus", it) }
                     put("motionPlan", JSONObject().apply {
                         put("sceneSummary", s.motionPlan.sceneSummary)
                         put("characterMotion", JSONArray(s.motionPlan.characterMotion))
@@ -348,7 +351,10 @@ data class ProjectEntity(
                             motionDirection = s.optString("motionDirection", ""),
                             visualPrompt = s.optString("visualPrompt", ""),
                             continuityRequirements = s.optString("continuityRequirements", ""),
-                            motionPlan = motionPlan
+                            motionPlan = motionPlan,
+                            generatedImageUrl = s.optString("generatedImageUrl", "").takeIf { it.isNotBlank() },
+                            generatedImageModel = s.optString("generatedImageModel", "").takeIf { it.isNotBlank() },
+                            generatedImageStatus = s.optString("generatedImageStatus", "").takeIf { it.isNotBlank() }
                         )
                     )
                 }

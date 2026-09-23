@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,7 +48,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -87,6 +90,7 @@ fun CreateProjectScreen(
     val audioPosMs by viewModel.audioPositionMs.collectAsState()
     val audioDurationMs by viewModel.audioDurationMs.collectAsState()
 
+    val focusManager = LocalFocusManager.current
     var projectName by remember(project?.id) { mutableStateOf(project?.name ?: "") }
     var songTitle by remember(project?.id) { mutableStateOf(project?.songTitle ?: "") }
     var artist by remember(project?.id) { mutableStateOf(project?.artist ?: "") }
@@ -125,11 +129,17 @@ fun CreateProjectScreen(
                 CinematicTopBar(
                     title = "Song & Vision",
                     subtitle = "Define your music and creative direction",
-                    onBack = { viewModel.navigateBack() }
+                    onBack = {
+                        focusManager.clearFocus()
+                        viewModel.navigateBack()
+                    }
                 )
                 StageProgressBar(
                     currentStage = Stage.SONG,
-                    onStageClick = { stage -> viewModel.navigateToStage(stage) }
+                    onStageClick = { stage ->
+                        focusManager.clearFocus()
+                        viewModel.navigateToStage(stage)
+                    }
                 )
             }
         },
@@ -143,6 +153,7 @@ fun CreateProjectScreen(
                 GlowingButton(
                     text = "REVEAL MY WORLD",
                     onClick = {
+                        focusManager.clearFocus()
                         viewModel.updateProjectDetails(
                             name = projectName,
                             songTitle = songTitle,
@@ -168,7 +179,10 @@ fun CreateProjectScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                },
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
         ) {
             // Error banner if any
@@ -303,6 +317,7 @@ fun CreateProjectScreen(
                                 color = ElectricCyan,
                                 isSelected = isSelected,
                                 onClick = {
+                                    focusManager.clearFocus()
                                     creativeDirection = if (creativeDirection.isBlank()) {
                                         preset
                                     } else if (!isSelected) {

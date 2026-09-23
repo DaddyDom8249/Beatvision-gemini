@@ -108,7 +108,10 @@ data class StoryboardScene(
     val motionDirection: String,
     val visualPrompt: String,
     val continuityRequirements: String,
-    val motionPlan: MotionPlan
+    val motionPlan: MotionPlan,
+    val generatedImageUrl: String? = null,
+    val generatedImageModel: String? = null,
+    val generatedImageStatus: String? = null
 )
 
 data class MotionPlan(
@@ -128,5 +131,6 @@ data class SceneConcept(
     val environment: String,
     val camera: String,
     val lighting: String,
-    val motion: String
+    val motion: String,
+    val isDemoFallback: Boolean = true
 )
