@@ -1,8 +1,11 @@
 package com.example.data.ai
 
 import com.example.BuildConfig
-import com.example.data.arena.ArenaGatewayClient
 import com.example.data.arena.SceneImageResult
+import com.example.data.provider.ImageGenerationRequest
+import com.example.data.provider.ProviderDefaults
+import com.example.data.provider.ProviderRegistry
+import com.example.data.provider.ProviderResult
 import com.example.data.model.CharacterProfile
 import com.example.data.model.Cinematography
 import com.example.data.model.EnvironmentProfile
@@ -75,7 +78,7 @@ class GeminiBeatVisionAiService(
         .connectTimeout(45, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build(),
-    private val arenaClient: ArenaGatewayClient = ArenaGatewayClient()
+    private val providerRegistry: ProviderRegistry = ProviderDefaults.imageRegistry()
 ) : BeatVisionAiService {
 
     private val modelName = "gemini-3.5-flash"
@@ -815,6 +818,14 @@ Return ONLY a valid JSON object matching this schema:
         scene: StoryboardScene,
         world: VisualWorld
     ): Result<SceneImageResult> = withContext(Dispatchers.IO) {
-        arenaClient.generateSceneImage(scene, world)
+        when (val result = providerRegistry.generateImage(ImageGenerationRequest(scene, world))) {
+            is ProviderResult.Success -> Result.success(result.value)
+            is ProviderResult.Failure -> Result.failure(
+                IllegalStateException(
+                    "Image provider '${result.providerId}' failed: ${result.message}",
+                    result.cause
+                )
+            )
+        }
     }
 }
