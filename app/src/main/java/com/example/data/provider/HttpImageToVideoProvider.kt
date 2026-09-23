@@ -7,6 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.net.URI
 import java.util.concurrent.TimeUnit
 
 /**
@@ -23,7 +24,7 @@ class HttpImageToVideoProvider(
         .build()
 ) : MotionProvider {
     init {
-        require(endpoint.startsWith("https://")) { "Motion provider endpoint must use HTTPS." }
+        validateEndpoint(endpoint)
     }
 
     override suspend fun generateMotion(request: MotionGenerationRequest): ProviderResult<VideoAsset> =
@@ -52,12 +53,16 @@ class HttpImageToVideoProvider(
 
             try {
                 client.newCall(builder.build()).execute().use { httpResponse ->
-                    val raw = httpResponse.body?.string().orEmpty()
+                    val body = httpResponse.body
+                        ?: return@withContext ProviderResult.Failure(descriptor.id, "Motion provider returned an empty response.", retryable = httpResponse.code >= 500)
+                    if (body.contentLength() > MAX_RESPONSE_BYTES) return@withContext ProviderResult.Failure(descriptor.id, "Motion provider response exceeds the safety limit.")
+                    val raw = body.stringLimited(MAX_RESPONSE_BYTES)
+                        ?: return@withContext ProviderResult.Failure(descriptor.id, "Motion provider response exceeds the safety limit.")
                     if (!httpResponse.isSuccessful) {
                         return@withContext ProviderResult.Failure(
                             descriptor.id,
                             "Motion provider returned HTTP ${httpResponse.code}.",
-                            retryable = httpResponse.code == 429 || httpResponse.code >= 500
+                            retryable = httpResponse.code == 408 || httpResponse.code == 429 || httpResponse.code >= 500
                         )
                     }
                     val json = JSONObject(raw)
