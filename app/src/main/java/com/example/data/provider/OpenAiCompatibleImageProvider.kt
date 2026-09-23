@@ -107,4 +107,52 @@ class OpenAiCompatibleImageProvider(
             "Continuity: ${world.continuityRules.joinToString("; ")}."
         ).joinToString(" ")
     }
+    
+    private fun validateEndpoint(value: String) {
+        require(value.length <= MAX_ENDPOINT_LENGTH) { "Provider endpoint is too long." }
+        val uri = try { URI(value) } catch (_: Exception) {
+            throw IllegalArgumentException("Provider endpoint is invalid.")
+        }
+        require(uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank()) {
+            "Provider endpoint must use HTTPS and a valid host."
+        }
+        require(uri.userInfo.isNullOrBlank()) { "Provider endpoint must not contain embedded credentials." }
+        require(uri.fragment.isNullOrBlank()) { "Provider endpoint must not contain a URL fragment." }
+    }
+
+    private fun isHttpsUrl(value: String): Boolean = try {
+        val uri = URI(value)
+        uri.scheme.equals("https", ignoreCase = true) &&
+            !uri.host.isNullOrBlank() &&
+            uri.userInfo.isNullOrBlank() &&
+            uri.fragment.isNullOrBlank()
+    } catch (_: Exception) {
+        false
+    }
+
+    private fun okhttp3.ResponseBody.stringLimited(maxBytes: Long): String? {
+        if (contentLength() > maxBytes) return null
+        val output = java.io.ByteArrayOutputStream()
+        byteStream().use { input ->
+            val buffer = ByteArray(16 * 1024)
+            var total = 0L
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                total += read
+                if (total > maxBytes) return null
+                output.write(buffer, 0, read)
+            }
+        }
+        return output.toString(Charsets.UTF_8.name())
+    }
+
+    companion object {
+        private const val MAX_RESPONSE_BYTES = 4L * 1024L * 1024L
+        private const val MAX_BASE64_LENGTH = 8 * 1024 * 1024
+        private const val MAX_PROMPT_LENGTH = 32 * 1024
+        private const val MAX_ENDPOINT_LENGTH = 2048
+        private const val MAX_MODEL_LENGTH = 256
+    }
 }
+
