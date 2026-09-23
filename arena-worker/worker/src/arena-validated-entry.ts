@@ -51,7 +51,7 @@ export default {
         return json(r, { ok: false, error: 'Request body exceeds the 256 KiB client scene limit.' }, 413);
       }
 
-      const clientIp = r.headers.get('CF-Connecting-IP') || r.headers.get('X-Forwarded-For') || 'client';
+      const clientIp = r.headers.get('CF-Connecting-IP') || 'unknown-client';
       const now = Date.now();
       const lastRequest = clientRateLimit.get(clientIp) || 0;
       if (now - lastRequest < RATE_LIMIT_WINDOW_MS) {
