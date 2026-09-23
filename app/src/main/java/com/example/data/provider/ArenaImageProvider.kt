@@ -3,6 +3,7 @@ package com.example.data.provider
 import com.example.data.arena.ArenaGatewayClient
 import com.example.data.arena.ArenaNetworkException
 import com.example.data.arena.ArenaRateLimitException
+import com.example.data.arena.ArenaProviderException
 import com.example.data.arena.SceneImageResult
 
 class ArenaImageProvider(
@@ -28,7 +29,7 @@ class ArenaImageProvider(
                 ProviderResult.Failure(
                     descriptor.id,
                     it.message ?: "Arena image generation failed.",
-                    retryable = it is ArenaNetworkException || it is ArenaRateLimitException,
+                    retryable = it is ArenaNetworkException || it is ArenaRateLimitException || it is ArenaProviderException,
                     cause = it
                 )
             }
